@@ -1,24 +1,102 @@
-from datetime import datetime, timezone
+import json, unittest, datetime
 
-def convert_iso_to_millis(iso_timestamp):
-    # Convert ISO timestamp to milliseconds
-    dt = datetime.fromisoformat(iso_timestamp.replace('Z', '+00:00'))
-    return int(dt.timestamp() * 1000)
+with open("./data-1.json","r") as f:
+    jsonData1 = json.load(f)
+with open("./data-2.json","r") as f:
+    jsonData2 = json.load(f)
+with open("./data-result.json","r") as f:
+    jsonExpectedResult = json.load(f)
 
-def merge_data(data1, data2):
-    # Merge the two datasets into unified format
-    merged = {}
 
-    for item in data1:
-        ts = convert_iso_to_millis(item['timestamp'])
-        merged[ts] = {'timestamp': ts, 'value': item['value']}
+def convertFromFormat1 (jsonObject):
 
-    for item in data2:
-        ts = item['timestamp']
-        if ts in merged:
-            merged[ts]['value'] += item['value']
-        else:
-            merged[ts] = {'timestamp': ts, 'value': item['value']}
+    locationParts = jsonObject['location'].split('/')
 
-    # Return sorted list by timestamp
-    return [merged[ts] for ts in sorted(merged)]
+    result = {
+        'deviceID': jsonObject['deviceID'],
+        'deviceType': jsonObject['deviceType'],
+        'timestamp': jsonObject['timestamp'],
+        'location': {
+            'country': locationParts[0],
+            'city': locationParts[1],
+            'area': locationParts[2],
+            'factory': locationParts[3],
+            'section': locationParts[4]
+        },
+        'data': {
+            'status': jsonObject['operationStatus'],
+            'temperature': jsonObject['temp']
+        }
+    }
+
+    return result
+
+def convertFromFormat2 (jsonObject):
+
+    date = datetime.datetime.strptime(
+        jsonObject['timestamp'],
+        '%Y-%m-%dT%H:%M:%S.%fZ'
+    )
+    timestamp = round(
+        (date - datetime.datetime(1970, 1, 1)).total_seconds() * 1000
+    )
+
+    result = {
+        'deviceID': jsonObject['device']['id'],
+        'deviceType': jsonObject['device']['type'],
+        'timestamp': timestamp,
+        'location': {
+            'country': jsonObject['country'],
+            'city': jsonObject['city'],
+            'area': jsonObject['area'],
+            'factory': jsonObject['factory'],
+            'section': jsonObject['section']
+        },
+        'data': jsonObject['data']
+    }
+
+    return result
+
+
+def main (jsonObject):
+
+    result = {}
+
+    if (jsonObject.get('device') == None):
+        result = convertFromFormat1(jsonObject)
+    else:
+        result = convertFromFormat2(jsonObject)
+
+    return result
+
+
+class TestSolution(unittest.TestCase):
+
+    def test_sanity(self):
+
+        result = json.loads(json.dumps(jsonExpectedResult))
+        self.assertEqual(
+            result,
+            jsonExpectedResult
+        )
+
+    def test_dataType1(self):
+
+        result = main (jsonData1)
+        self.assertEqual(
+            result,
+            jsonExpectedResult,
+            'Converting from Type 1 failed'
+        )
+
+    def test_dataType2(self):
+
+        result = main (jsonData2)
+        self.assertEqual(
+            result,
+            jsonExpectedResult,
+            'Converting from Type 2 failed'
+        )
+
+if __name__ == '__main__':
+    unittest.main()
